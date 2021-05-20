@@ -28,6 +28,7 @@ RUNOFF_total = np.zeros(385)
 
 TGRP_total = np.zeros(385)
 TGRL_total = np.zeros(385)
+TBOT_total = np.zeros(385)
 
 H_total = np.zeros(384)
 LH_total = np.zeros(384)
@@ -39,8 +40,9 @@ DETENTION_STORAGE_IN_total[0] = 0
 CMC_total[0] = 0.0
 RUNOFF_total[0] = 0.0
 
-TGRL_total[0] = 300 # kelvin
-TGRP_total[0] = 301
+TGRL_total[0] = 292 # kelvin
+TGRP_total[0] = 292
+TBOT_total[0] = 292
 
 iter_total = 0
 
@@ -132,7 +134,7 @@ for i in range(0,384):
 	CMC = CMC_total[i] # canopy storage depth at current time step
 	DETENTION_STORAGE_IN = DETENTION_STORAGE_IN_total[i] # amount of water that is being stored in outflow area of green roof
 	ET = 0.0 # evapotranspiration values
-	TBOT = 300 # bottom of the soil temperature (Kelvin)
+	TBOT = TBOT_total[i] # bottom of the soil temperature (Kelvin)
 	TGRL = TGRL_total[i] # soil temperature at central node (kelvin)
 
 
@@ -443,16 +445,38 @@ for i in range(0,384):
 		# now creat the s coeffcient (s = beta * DT/(DX**2)) from the
 		# numerical differentiation scheme
 
-		S = SOIL_HEAT_BETA*DT/(2*DX**2)
+		A = np.zeros((3,3))
+		B_vals = np.zeros((3,1))
+
+		S = SOIL_HEAT_BETA*DT/(DX**2)
+
+		A[0,0] = 1
+		A[1,0] = -S
+		A[1,1] = 1+2*S
+		A[1,2] = -S
+		A[2,1] = -2*S
+		A[2,2] = 1+2*S
+
+		B_vals[0,0] = TGRP
+		B_vals[1,0] = TGRL
+		B_vals[2,0] = TBOT
+
+		# print(A)
+		# print(np.linalg.inv(A))
+		# print(np.dot(np.linalg.inv(A),B_vals))
+		
 
 		# Now solve for the New temperature:
-		TGRL = (TGRL +S*TBOT + S*TGRP)/(1+2*S)
+		TGRP,TGRL,TBOT = np.dot(np.linalg.inv(A),B_vals)
+		# print(TBOT)
+		# ss
+			#(TGRL +S*TBOT + S*TGRP)/(1+2*S)
 
 		# we now adjust the Surface temperature ?
 
 		TGRP = (YY + (ZZ1 - 1)*TGRL)/ZZ1
 
-		return(TGRP,TGRL)
+		return(TGRP,TGRL,TBOT)
 
 	def green_roof_soil(CANLIQ, PRECIP_input, MAXLIQ, EC_IN, ET_IN, EDIR_IN,SMC,SMCMAX,SMCDRY,DETENTION_STORAGE):
 
@@ -665,7 +689,7 @@ for i in range(0,384):
 			break
 
 	# print(TGRP-273.15)	
-	TGRP_, TGRL = SHFLX(TGRL, SMCMAX, SMC, TGRP, DF1, STORAGE_MAX, TBOT, YY, ZZ1, CSOIL)
+	TGRP_, TGRL ,TBOT= SHFLX(TGRL, SMCMAX, SMC, TGRP, DF1, STORAGE_MAX, TBOT, YY, ZZ1, CSOIL)
 	# print(TGRP)
 
 
@@ -685,6 +709,9 @@ for i in range(0,384):
 	SMC_total[i+1] = SMC
 	TGRP_total[i+1] = TGRP
 	TGRL_total[i+1] = TGRL
+	TBOT_total[i+1] = TBOT
+
+
 	DETENTION_STORAGE_IN_total[i+1] = DETENTION_STORAGE_IN
 	CMC_total[i+1] = CMC
 	RUNOFF_total[i+1] = RUNOFF
@@ -694,47 +721,50 @@ print(iter_total)
 
 # plt.plot(SMC_total)
 plt.figure(figsize=(15,9))
-plt.subplot(311)
-plt.xlim([dates_subset[0],dates_subset[-1]])
-plt.bar(dates_subset, data_subset.P.values,width=0.01,linewidth=0.001)
-plt.ylabel(r'Rainfall $[mm]$',fontsize=18)
-plt.legend(['Rainfall'],frameon=False,fontsize=18)
-plt.xticks([])
-plt.yticks(fontsize=14)
-
-# plt.subplot(312)
-# plt.plot(dates_subset, data_subset.TA_1_1_1.values,color='#BD4D24',linewidth=2.5)
+# plt.subplot(311)
 # plt.xlim([dates_subset[0],dates_subset[-1]])
-# plt.ylabel(r'Temperature $[C]$',fontsize=16)
+# plt.bar(dates_subset, data_subset.P.values,width=0.01,linewidth=0.001)
+# plt.ylabel(r'Rainfall $[mm]$',fontsize=18)
+# plt.legend(['Rainfall'],frameon=False,fontsize=18)
 # plt.xticks([])
-# # plt.xticks([])
+# plt.yticks(fontsize=14)
 
-plt.subplot(312)
-plt.xlim([dates_subset[0],dates_subset[-1]])
-plt.plot(dates_subset, SMC_total[:384],color='k',label = 'Soil Moisture',linewidth=2.5)
-plt.ylabel(r'SWC $[m^3 m^{-3}]$',fontsize=18)
-plt.xticks([])
-plt.yticks(fontsize=14)
-plt.legend(fontsize=18,frameon=False)
-# plt.subplot(312)
+# # plt.subplot(312)
 # # plt.plot(dates_subset, data_subset.TA_1_1_1.values,color='#BD4D24',linewidth=2.5)
 # # plt.xlim([dates_subset[0],dates_subset[-1]])
 # # plt.ylabel(r'Temperature $[C]$',fontsize=16)
 # # plt.xticks([])
+# # # plt.xticks([])
 
-# # plt.plot(data_subset.H_1_1_1.values)
-# # plt.plot(LH_total)
-# # plt.plot(-1*G_total)
-# plt.plot(dates_subset,NETRAD_total,linewidth=3.0,color='k',label='Net Radiation')
-# # plt.plot(CMC_total)
-# # plt.plot(data_subset.P.values)
-plt.subplot(313)
-plt.plot([dates_subset[0],dates_subset[-1]],[0,0],color='k',linewidth=0.5,alpha=0.5)
-# plt.plot(dates_subset,H_total[:384],label='Sensible Heat',linewidth=2.0,color='#BA2B30')
-plt.plot(dates_subset,LH_total[:384],label='Latent Heat',linewidth=2.5,color='#BA2B30')
+# plt.subplot(312)
+# plt.xlim([dates_subset[0],dates_subset[-1]])
+# plt.plot(dates_subset, SMC_total[:384],color='k',label = 'Soil Moisture',linewidth=2.5)
+# plt.ylabel(r'SWC $[m^3 m^{-3}]$',fontsize=18)
+# plt.xticks([])
+# plt.yticks(fontsize=14)
+# plt.legend(fontsize=18,frameon=False)
+# # plt.subplot(312)
+# # # plt.plot(dates_subset, data_subset.TA_1_1_1.values,color='#BD4D24',linewidth=2.5)
+# # # plt.xlim([dates_subset[0],dates_subset[-1]])
+# # # plt.ylabel(r'Temperature $[C]$',fontsize=16)
+# # # plt.xticks([])
+
+# # # plt.plot(data_subset.H_1_1_1.values)
+# # # plt.plot(LH_total)
+# # # plt.plot(-1*G_total)
+# # plt.plot(dates_subset,NETRAD_total,linewidth=3.0,color='k',label='Net Radiation')
+# # # plt.plot(CMC_total)
+# # # plt.plot(data_subset.P.values)
+# plt.subplot(313)
+# plt.plot([dates_subset[0],dates_subset[-1]],[0,0],color='k',linewidth=0.5,alpha=0.5)
+plt.plot(dates_subset,TBOT_total[:384],label='Bottom Temperature',linewidth=2.0,color='#BA2B30')
+plt.plot(dates_subset,TGRL_total[:384],label='Green Roof Center Temperature')
+plt.plot(dates_subset,TGRP_total[:384],label='Green Roof Top Temperature')
+plt.plot(dates_subset,data_subset.TA_1_1_1[:384].values+273.15,label='Air Temperature')
+# plt.plot(dates_subset,LH_total[:384],label='Latent Heat',linewidth=2.5,color='#BA2B30')
 # plt.plot(dates_subset,-1*G_total[:384],label='Ground Heat', linewidth=2.0,color='#9C7159')
 plt.xlim([dates_subset[0],dates_subset[-1]])
-plt.ylabel(r'Flux $[W m^{-2}]$',fontsize=18)
+plt.ylabel(r'Temp $[C]$',fontsize=18)
 plt.yticks(fontsize=14)
 plt.legend(fontsize=18,frameon=False)
 plt.xlabel(r'Time $[30 min]$',fontsize=18)
