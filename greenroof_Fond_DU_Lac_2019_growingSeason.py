@@ -720,6 +720,8 @@ for i in range(0,52848):
 	iter_total += it
 print(iter_total)
 
+final_dataframe = pd.DataFrame({'H':H_total,'LH':LH_total,'G':G_total,'RN':NETRAD_total,'SMC':SMC_total,'DETENTION_STORAGE':DETENTION_STORAGE_IN_total,'CMC':CMC_total,'RUNOFF':RUNOFF_total,'TGRP':TGRP_total,'TGRL':TGRL_total,'TBOT':TBOT_total})
+final_dataframe.to_csv('Fond_du_lac_2019_growing_season.csv')
 # plt.plot(SMC_total)
 plt.figure(figsize=(15,9))
 # plt.subplot(311)
