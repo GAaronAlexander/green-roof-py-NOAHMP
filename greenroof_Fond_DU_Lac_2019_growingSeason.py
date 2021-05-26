@@ -1,39 +1,34 @@
 import numpy as np
 import pandas as pd
-from datetime import datetime
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
-import seaborn as sns 
-sns.set_style("ticks")
-
-rcParams['font.family'] = 'serif'
-
-rcParams['font.sans-serif'] = ['Cooper Std']
 
 
-dates = pd.date_range(start='2018/01/01 00:00:00', end='2019/05/01 23:30:00',freq='30T')
-data = pd.read_csv('../../data/fluxnet_data_Michigan_urban/AMF_US-CS1_BASE-BADM_2-5/AMF_US-CS1_BASE_HH_2-5.csv',na_values=-9999,dtype=np.float64)
-data.index = dates
+## Read in different data sets of interest:
+data_temp = pd.read_csv('./clean_inputs_for_greenroof_tests/AirTemp_clean_Fond_Du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
+data_longwave = pd.read_csv('./clean_inputs_for_greenroof_tests/Merra_2_longwave_Fond_du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
+data_pressure = pd.read_csv('./clean_inputs_for_greenroof_tests/Pressure_clean_mb_Fond_Du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
+data_RH = pd.read_csv('./clean_inputs_for_greenroof_tests/RH_clean_Fond_Du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
+data_shortwave = pd.read_csv('./clean_inputs_for_greenroof_tests/Shortwave_clean_Fond_Du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
+data_WindSpeed = pd.read_csv('./clean_inputs_for_greenroof_tests/WindSpeed_clean_Fond_Du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
 
-## create data subset
-data_subset = data['2018-08-17':'2018-08-24']
-dates_subset = data_subset.index.values
+data_precip = pd.read_csv('./clean_inputs_for_greenroof_tests/Precip_clean_Fond_Du_lac_May_to_October_2019.csv',parse_dates=True,index_col=0)
 
+print(data_temp)
 
 ## create values to catch values
-SMC_total = np.zeros(385)
-CMC_total = np.zeros(385)
-DETENTION_STORAGE_IN_total = np.zeros(385)
-RUNOFF_total = np.zeros(385)
+SMC_total = np.zeros(52849)
+CMC_total = np.zeros(52849)
+DETENTION_STORAGE_IN_total = np.zeros(52849)
+RUNOFF_total = np.zeros(52849)
 
-TGRP_total = np.zeros(385)
-TGRL_total = np.zeros(385)
-TBOT_total = np.zeros(385)
+TGRP_total = np.zeros(52849)
+TGRL_total = np.zeros(52849)
+TBOT_total = np.zeros(52849)
 
-H_total = np.zeros(384)
-LH_total = np.zeros(384)
-G_total = np.zeros(384)
-NETRAD_total = np.zeros(384)
+H_total = np.zeros(52849)
+LH_total = np.zeros(52849)
+G_total = np.zeros(52849)
+NETRAD_total = np.zeros(52849)
 
 SMC_total[0] = 0.4
 DETENTION_STORAGE_IN_total[0] = 0
@@ -72,7 +67,7 @@ global SMAX
 ## These are needed for GLOBAL 
 FVEG = 0.8 #fraction of the grid square that is covered by vegetation (unitless) (literture suggests 0.6 to 1.0)
 
-DT = 1800.0 #time step  in seconds 
+DT = 300.0 #time step  in seconds 
 SAI_LAI_storage_factor = 0.1 # a factor that transforms the LAI and SAI values into a depth (unitless)
 TOTAL_VEG = 1.5 # the total LAI and SAI values together (m^2 per m^2) Literature suggests 1 - 3
 STORAGE_MAX = 76.2/1000 # max storage of the growing medium in dpeth (m) Based on 6 inch depth 
@@ -83,27 +78,30 @@ DETENTION_storage_MAX = 10.0/1000 # maximum amount of detention storage (mm)
 k = (0.002/60)*DT # the green roof model uses a non-linear formula. K is the multiplier before the value of Q
 n = 1.67 # non-linear exponent 
 
-for i in range(0,384):
-	PS = data_subset.PA_1_1_1.values[i] * 10 
-	TA = data_subset.TA_1_1_1.values[i] + 273.15
-	SSG = data_subset.SW_IN_1_1_1.values[i]
-	LLG = data_subset.LW_IN_1_1_1.values[i]
+for i in range(0,52848):
+	PS = data_pressure['BP'].values[i] # Hpa
+	TA = data_temp[' Value'].values[i] + 273.15 #degrees Kelvin
+	SSG = data_shortwave[' Value'].values[i] # watts per meter squared
+	LLG = data_longwave['Value'].values[i] # watts per meter squared
 
-	Sat_press = 6.1078*10**(7.5*(TA-273.15)/((TA-273.15)+237.3))
-	Pressure_vapor = Sat_press - data_subset.VPD_PI_1_1_1.values[i]
-	RHOO = ((PS - Pressure_vapor)*100)/(287.058*TA) + Pressure_vapor*100/(461.495*TA)
-	RHO = RHOO * 0.001
+
+	Sat_press = 6.1078*10**(7.5*(TA-273.15)/((TA-273.15)+237.3)) #uses the tetens equation (hPa)
+	Pressure_vapor = Sat_press*data_RH[' Value'].values[i]/100 #vapor pressure is in (hPa)
+	RHOO = ((PS - Pressure_vapor)*100)/(287.058*TA) + Pressure_vapor*100/(461.495*TA) #air density in kg/m^3
+	RHO = RHOO * 0.001 # air density in cgs units
+
 	w = Pressure_vapor*287.058/(461.495*(PS - Pressure_vapor))
-	QA = w/(w+1)
+	QA = w/(w+1) #specific humidity in kg/kg
 
-	UA = data_subset.WS_1_1_1.values[i]
-	TH2V = TA*(1000/PS)**.286
+
+	UA = data_WindSpeed['Value'].values[i] # wind speed in m/s
+	TH2V = TA*(1000/PS)**.286 #potential temperature in K
 	
-	TGRP = TGRP_total[i]
+	TGRP = TGRP_total[i] #surface temperature in K
 
-	RAIN = (data_subset.P.values[i]/(DT))*(3600) # conver to MM/hr
+	RAIN = (data_precip['Value'].values[i]/(DT))*(3600) # conver to MM/hr
 
-	RUNOFF = RUNOFF_total[0]
+	RUNOFF = RUNOFF_total[0] #mm
 
 	## Atmospheric Values needed to run the model 
 	# TGRP = 301 # Green Roof surface temperature (Kelvin)
@@ -363,7 +361,7 @@ for i in range(0,384):
 			GX = 0
 
 		RCSOIL =  GX
-		RCSOIL = np.max(RCSOIL,0.0001)
+		RCSOIL = max(RCSOIL,0.0001)
 
 		RC = RSMIN/ (LAI *RCS * RCT * RCQ * RCSOIL) #the total resistance (invert to get a conductance!)
 
@@ -740,52 +738,13 @@ plt.figure(figsize=(15,9))
 # # # plt.xticks([])
 
 plt.subplot(311)
-plt.xlim([dates_subset[0],dates_subset[-1]])
-plt.plot(dates_subset[:384], SMC_total[:384],color='k',label = 'Soil Moisture',linewidth=2.5)
+plt.plot(SMC_total,color='k',label = 'Soil Moisture',linewidth=2.5)
 plt.ylabel(r'SWC $[m^3 m^{-3}]$',fontsize=18)
-plt.xticks([])
+# plt.xticks([])
 plt.yticks(fontsize=14)
 plt.legend(fontsize=18,frameon=False)
-# # plt.subplot(312)
-# # # plt.plot(dates_subset, data_subset.TA_1_1_1.values,color='#BD4D24',linewidth=2.5)
-# # # plt.xlim([dates_subset[0],dates_subset[-1]])
-# # # plt.ylabel(r'Temperature $[C]$',fontsize=16)
-# # # plt.xticks([])
 
-# # # plt.plot(data_subset.H_1_1_1.values)
-# # # plt.plot(LH_total)
-# # # plt.plot(-1*G_total)
-# # plt.plot(dates_subset,NETRAD_total,linewidth=3.0,color='k',label='Net Radiation')
-# # # plt.plot(CMC_total)
-# # # plt.plot(data_subset.P.values)
-# plt.subplot(313)
-# plt.plot([dates_subset[0],dates_subset[-1]],[0,0],color='k',linewidth=0.5,alpha=0.5)
+
 plt.subplot(312)
-plt.plot(dates_subset[:384],TBOT_total[:384],label='Bottom Temperature',linewidth=2.0,color='#BA2B30')
-plt.plot(dates_subset[:384],TGRL_total[:384],label='Green Roof Center Temperature')
-plt.plot(dates_subset[:384],TGRP_total[:384],label='Green Roof Top Temperature')
-plt.plot(dates_subset[:384],data_subset.TA_1_1_1[:384].values+273.15,label='Air Temperature')
-# plt.plot(dates_subset,LH_total[:384],label='Latent Heat',linewidth=2.5,color='#BA2B30')
-# plt.plot(dates_subset,-1*G_total[:384],label='Ground Heat', linewidth=2.0,color='#9C7159')
-plt.xlim([dates_subset[0],dates_subset[-1]])
-plt.ylabel(r'Temp $[C]$',fontsize=18)
-plt.yticks(fontsize=14)
-plt.legend(fontsize=18,frameon=False)
-plt.xlabel(r'Time $[30 min]$',fontsize=18)
-plt.xticks(fontsize=14)
-
-plt.subplot(313)
-# plt.plot(dates_subset,LH_total[:384],label='Latent Heat',linewidth=2.5,color='#BA2B30')
-plt.plot(dates_subset,-1*G_total[:384],label='Ground Heat', linewidth=2.0,color='#9C7159')
-
-# plt.plot(dates_subset,TGRL_total[:384]-273.15, linewidth=2.0,color='#632D6E',label='Soil Center')
-# plt.plot(dates_subset,TGRP_total[:384]-273.15,color='#BD4D24',linewidth=2.5, label='Soil Surface')
-# plt.ylabel(r'Temperature $[C]$',fontsize=16)
-# plt.xlim([dates_subset[0],dates_subset[-1]])
-
-sns.despine()
-# plt.plot(RUNOFF_total)
-plt.tight_layout()
+plt.plot(LH_total)
 plt.show()
-
-print(np.sum(RUNOFF_total*DT))
